@@ -11,7 +11,7 @@ GPIO.setmode(GPIO.BCM)
 GPIO.setup(PIR_PIN, GPIO.IN)
 
 # MQTT 설정
-BROKER = "192.168.25.38"
+BROKER = "BROKER_IP"
 PORT = 1883
 TOPIC = "sensor/pir/room1"
 
