@@ -81,7 +81,6 @@ def on_message(client, userdata, msg):
             server_time = payload["timestamp"]
             initial = payload["initial"]
 
-            # 서버-클라이언트 간 시간 차이를 보정
             delay = (time.time() * 1000) - server_time
             current_time += (delay / 1000)
 
