@@ -18,7 +18,7 @@ TOPIC = "sensor/pir/room1"
 # VLC 플레이어 초기화
 class VLCPlayer:
     def __init__(self):
-        self.instance = vlc.Instance("--aout", "alsa")
+        self.instance = vlc.Instance("--aout", "alsa", "--alsa-audio-device=hw:2,0")
         self.player = self.instance.media_player_new()
         self.current_url = None
         self.current_time = 0
@@ -30,9 +30,9 @@ class VLCPlayer:
             self.current_url = url
 
         self.player.play()
-        time.sleep(0.5)  # VLC가 준비될 때까지 대기
+        time.sleep(0.1)  # VLC가 준비될 때까지 대기
         self.player.set_time(int(start_time * 1000))  # 특정 시점으로 이동
-        print(f"Playing music from {url} at {start_time}s")
+       # print(f"Playing music from {url} at {start_time}s")
 
     def set_time(self, start_time):
         self.player.set_time(int(start_time * 1000))
@@ -42,25 +42,37 @@ class VLCPlayer:
         print("Music paused.")
 
     def set_volume(self, volume):
-        self.player.audio_set_volume(volume)  # VLC 볼륨 설정
-        print(f"Set volume to {volume}%.")
-
+        self.player.audio_set_volume(volume) 
 vlc_player = VLCPlayer()
 
 # 모션 감지 상태 변수
 motion_detected = False
 last_motion_time = 0
-MOTION_TIMEOUT = 20
+MOTION_TIMEOUT = 10
 
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
-        print("MQTT 연결 성공!")
+        #print("MQTT 연결 성공")
+        print("""
+     [MQTT 연결]
++------------------+
+|    CONNECTION    |
+|     SUCCESS!     |
+|  --------------  |
+|   STATUS: ✔      |
+|                  |
+|  Broker: ACTIVE  |
++------------------+
+
+** MQTT 연결 성공! **
+""")
+
         client.subscribe(TOPIC)
     else:
-        print(f"MQTT 연결 실패. 코드: {rc}")
+        print(f"MQTT 연결실패. code: {rc}")
 
 def on_message(client, userdata, msg):
-    print(f"Received message on topic {msg.topic}: {msg.payload.decode()}")
+    #print(f"Received message on topic {msg.topic}: {msg.payload.decode()}")
     try:
         payload = json.loads(msg.payload.decode())
         if "url" in payload:
@@ -69,54 +81,117 @@ def on_message(client, userdata, msg):
             server_time = payload["timestamp"]
             initial = payload["initial"]
 
-            # 서버-클라이언트 간 시간 차이를 보정
             delay = (time.time() * 1000) - server_time
             current_time += (delay / 1000)
 
-            print(f"Streaming music from: {url} at {current_time}s")
             if initial:
-                # initial: true일 경우 볼륨 0으로 설정하고 재생
                 vlc_player.play(url, current_time)
                 vlc_player.set_volume(0)
             else:
+                print(f"""
+      ♪ ♪ ♪
+  {current_time}부터 음악 재생시작)
++----------------+
+|                |
+|      *****     |
+|    *       *   |
+|   *         *  |
+|    *       *   |
+|      *****     |
+|                |
+|      *****     |
+|    *       *   |
+|   *         *  |
+|    *       *   |
+|      *****     |
+|                |
++----------------+
+     ♪ ♪ ♪
+""")
+
                 if vlc_player.current_url == url:
                     # URL이 동일하다면 기존 객체에서 시점 변경
                     vlc_player.set_time(current_time)
                 else:
                     # URL이 변경되었다면 새로 재생
                     vlc_player.play(url, current_time)
-                vlc_player.set_volume(50)
-           # vlc_player.play(url, current_time)
-           # vlc_player.set_volume(100)  # 볼륨 최대치로 설정
+                vlc_player.set_volume(100)
 
         elif "stop" in payload:
-            print("Stopping music")
-            vlc_player.set_volume(0)  # 볼륨을 0으로 줄임 (음악 끈 것처럼 처리)
-    except Exception as e:
-        print(f"Error: {e}")
+            print("""
+     [음악 꺼짐]
++----------------+
+|      X    X    |
+|       X  X     |
+|        XX      |
+|       X  X     |
+|      X    X    |
+|                |
+|      X    X    |
+|       X  X     |
+|        XX      |
+|       X  X     |
+|      X    X    |
+|                |
++----------------+
+   ** 음악이 꺼졌습니다 **
+""")
+
+            vlc_player.set_volume(0) 
+    except json.JSONDecodeError:
+        pass
 
 client = mqtt.Client()
 client.on_connect = on_connect
 client.on_message = on_message
 
 try:
-    print("PIR 센서를 모니터링 중...")
+    print("""
++----------------+
+|                |
+|      *****     |
+|    *       *   |
+|   *         *  |
+|    *       *   |
+|      *****     |
+|                |
+|      *****     |
+|    *       *   |
+|   *         *  |
+|    *       *   |
+|      *****     |
+|                |
++----------------+
+""")
+
+    print("Speaker's PIR sensor monitoring")
     client.connect(BROKER, PORT, 60)
     client.loop_start()
-    print("MQTT connect try")
-
     while True:
         if GPIO.input(PIR_PIN):  # 모션 감지됨
             if not motion_detected:
-                print("모션 감지됨!")
+                print("""
+            [PIR 센서]
+            +--------+
+            | MOTION |
+            | Detect |
+            +--------+
+            """)
                 client.publish(TOPIC, "motionDetected", qos=1)
                 motion_detected = True
             last_motion_time = time.time()
         else:
             if motion_detected and (time.time() - last_motion_time > MOTION_TIMEOUT):
-                print("모션 없음 20초 이상 지속")
+                print("""
+            [PIR 센서]
+            +--------+
+            | MOTION |
+            |  Stop  |
+            |for 10s |
+            +--------+
+            """)
                 client.publish(TOPIC, "motionStopped", qos=1)
-                print("모션 없음 보내기 성공")  # 볼륨을 0으로 줄임
+                print(".      motionStopped 서버로 전송")
                 motion_detected = False
 
         time.sleep(1)
